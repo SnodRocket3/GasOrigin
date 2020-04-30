@@ -4,15 +4,13 @@ import os
 from sklearn.model_selection import train_test_split
 from sklearn import metrics
 from sklearn.metrics import confusion_matrix
-import timeit
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import learning_curve
+
 
 # change directory to data folder
 os.chdir(os.getcwd() + r'/data/')
-
 
 # code to pickle excel file for dataset update
 # execute the code below that begins with ##
@@ -23,7 +21,7 @@ os.chdir(os.getcwd() + r'/data/')
 # pickle the df
 # df = pd.to_pickle(df, 'Natural_Gas_df_NewVersion(#.0).pkl')
 # building Gas Database dataframe from a pickled df to increase speed
-df = pd.read_pickle('Natural_Gas_df_5.0.pkl')
+df = pd.read_pickle('Natural_Gas_df_NewVersion(#.0).pkl')
 
 # the feature input is currently being worked on
 # creating a list of possible input features to chose from
@@ -36,22 +34,20 @@ command = input('''
 From the above list, what geochemical data would you like
 to use to analyze the origin of your natural gas sample?
 Example of input(copy and paste from list, add spaces 
-in-between): C1 C2 δ13CO2 δ13C1 C1/(C2+C3) δDC1
+in-between): δ13CO2 δ13C1 C1/(C2+C3) δDC1
 Keep in mind reduced dimensions typically results in larger
 training datasets. You will be provided with training dataset
 size and feature importance to help decision making!''').split()
-# common geochemical parameters to try out:
-# C1/(C2+C3) δDC1 δ13CO2 δ13C1
-start = timeit.default_timer()
+
 # Origin is a column in the df of just the classified gas samples (training dataset with holes)
 # adding the Origin column from our df to the beginning of the the input geochemistry feature list
 # need to add the Origin column to determine holes in the dataset and create the training dataset df
 command.insert(0, 'Origin')
 # removing every row that contains a NaN
 training_dataset_df = df[command].dropna()
-# 300 was picked based on linear curves
+# 300 was picked based on the interpretation of multiple CV curves
 if len(training_dataset_df) <= 300:
-    print('''   Training dataset size is less than or equal to 100 try again and remove 
+    print('''Training dataset size is less than or equal to 300 try again and remove 
     some geochemical features or use some of the suggested features''')
 # .pop removes the first item in the command list that was added above ('Origin')
 command.pop(0)
@@ -66,7 +62,7 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random
 # the initial training group is split to determine model accuracy but the train test split df is put back together
 # when classifying the samples
 print('Length of Training Samples: ', len(X))
-# the future 0.20 RandomForest Classifier changes the default n_estimators from 10 -> 100
+# the 0.20 RandomForest Classifier changes the default n_estimators from 10 -> 100
 # reassigning the RandomForestClassifier model with 50 n_estimators
 clf = RandomForestClassifier(n_estimators=50)
 # training the model using our created training dataset
@@ -76,29 +72,19 @@ clf = RandomForestClassifier(n_estimators=50)
 clf_m = clf.fit(X_train, y_train.values.ravel())
 # running split test date in the RandomForestClassifier model
 y_predict = clf_m.predict(X_test)
-# stop timer. timing the time lapse to create the model
-stop = timeit.default_timer()
-# printing the time lapse
-print('Seconds: ', stop - start)
 # display model accuracy
 # normalize=True
 # sample_weight=None
 print("Accuracy: ", metrics.accuracy_score(y_test, y_predict))
 
 # confusion matrix: in depth analyze of model accuracy
-# need to determine labels and change color configuration
 conf_mat = confusion_matrix(y_test, y_predict)
 print(conf_mat)
-# color configuration for confusion matrix
-# sns.heatmap(conf_mat, annot=True, cmap='Blues', vmin=0, vmax=90)
-# apparently, current bug with the update. top/bottom y-axis cut off
-# plt.show()
 
 # numerical representation of feature importance
 # visual representation doesn't work/two attempts below, do not run them, pick numerical or visual
 for feature in zip(X, clf.feature_importances_):
     print('Feature Importance: ', feature)
-
 
 # by now the user should be able to input any desired features to create however many
 # dimensions they want for the analysis. With the unique multi dimension entry the user will
@@ -133,62 +119,6 @@ thermogenic = confidence[0,4]
 # classification over n_trees
 print ('Abiotic:', abiotic_c*100,'%')
 print("Microbial Primary (CO2 Reduction):", microb_p_c_c*100,'%')
-print("Microbial Primary (acetate fermentation):", microb_p_af_c*100,'%')
+print("Microbial Primary (methyl-type fermentation):", microb_p_af_c*100,'%')
 print("Secondary Microbial:", s_microb*100,'%')
 print("Thermogenic:", thermogenic*100,'%')
-
-
-
-# re-arranging the y df to create a learning curve to determine the min number of samples needed to
-# create an accurate model
-yy = y.values.ravel()
-# Create CV training and test scores for various training set sizes
-train_sizes, train_scores, test_scores = learning_curve(RandomForestClassifier(n_estimators=50),
-                                                        X,
-                                                        yy,
-                                                        # Number of folds in cross-validation
-                                                        cv=10,
-                                                        # Evaluation metric
-                                                        scoring='accuracy',
-                                                        # Use all computer cores
-                                                        n_jobs=-1,
-                                                        # 50 different sizes of the training set
-                                                        train_sizes=np.linspace(0.01, 1.0, 10)
-)
-
-
-# Create means and standard deviations of training set scores
-train_mean = np.mean(train_scores, axis=1)
-train_std = np.std(train_scores, axis=1)
-
-# Create means and standard deviations of test set scores
-test_mean = np.mean(test_scores, axis=1)
-test_std = np.std(test_scores, axis=1)
-
-# Draw lines
-plt.plot(train_sizes, train_mean, '--', color="#111111",  label="Training score")
-plt.plot(train_sizes, test_mean, color="#111111", label="Cross-validation score")
-
-# Draw bands
-plt.fill_between(train_sizes, train_mean - train_std, train_mean + train_std, color="#DDDDDD")
-plt.fill_between(train_sizes, test_mean - test_std, test_mean + test_std, color="#DDDDDD")
-
-# Create plot
-plt.title("Learning Curve")
-plt.xlabel("Training Set Size"), plt.ylabel("Accuracy Score"), plt.legend(loc="best")
-plt.tight_layout()
-plt.show()
-
-import pandas as pd
-
-## convert your array into a dataframe
-df = pd.DataFrame (train_sizes)
-
-## save to xlsx file
-
-filepath = 'my_excel_file2.xlsx'
-
-df.to_excel(filepath, index=False)
-
-
-
